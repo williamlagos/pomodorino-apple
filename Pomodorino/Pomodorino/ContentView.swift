@@ -8,11 +8,22 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State var currentDate = Date()
+    @State var timeRemaining = 1500
+    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     var body: some View {
         VStack {
-            Label("12:00", systemImage: /*@START_MENU_TOKEN@*/"42.circle"/*@END_MENU_TOKEN@*/)
-            Text("Pomodorino")
-                .padding()
+            Text("Countdown: \(timeRemaining)")
+                .bold()
+                .onReceive(timer) { _ in
+                    if timeRemaining > 0 {
+                        timeRemaining -= 1
+                    }
+                }
+            Text("\(currentDate)")
+                .onReceive(timer) { input in
+                    currentDate = input
+                }
         }
     }
 }
