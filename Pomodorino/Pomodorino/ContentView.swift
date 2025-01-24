@@ -50,6 +50,7 @@ struct ContentView: View {
                 HStack {
                     Button(action: {
                         isRunning.toggle()
+                        scheduleNotification()
                     }) {
                         Text(isRunning ? "Pause" : "Start")
                             .frame(maxWidth: .infinity)
@@ -76,6 +77,17 @@ struct ContentView: View {
             .padding()
             .foregroundColor(.white)
         }
+    }
+    func scheduleNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "Pomodoro Timer"
+        content.body = "Your Pomodoro session has ended. Take a break!"
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1500, repeats: false)
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
+
+        UNUserNotificationCenter.current().add(request)
     }
 }
 
