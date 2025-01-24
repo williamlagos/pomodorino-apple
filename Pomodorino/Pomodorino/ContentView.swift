@@ -8,37 +8,74 @@
 import SwiftUI
 import Foundation
 
-let backgroundGradient = LinearGradient(
-    colors: [Color.red, Color.yellow],
-    startPoint: .top, endPoint: .bottom)
-
 func formatCountdown(seconds: Int) -> String {
     // Calculate hours, minutes, and seconds
-    let hours = seconds / 3600
-    let minutes = (seconds % 3600) / 60
+    let minutes = seconds / 60
     let remainingSeconds = seconds % 60
-    
-    // Format the result as "HH:mm:ss"
-    return String(format: "%02d:%02d:%02d", hours, minutes, remainingSeconds)
+    return String(format: "%02d:%02d", minutes, remainingSeconds)
 }
 
 struct ContentView: View {
-    @State var timeRemaining = 1500
+    @State private var timeRemaining = 1500 // Default 25 minutes
+    @State private var isRunning = false
+    
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    
+    // Compute a gradient that changes with the time remaining
+    private var dynamicGradient: LinearGradient {
+        let fraction = Double(timeRemaining) / 1500.0
+        let endColor = Color.red.opacity(1 - fraction)
+        let startColor = Color.yellow.opacity(fraction)
+        return LinearGradient(colors: [startColor, endColor], startPoint: .top, endPoint: .bottom)
+    }
+    
     var body: some View {
         ZStack {
-            backgroundGradient
-            VStack {
-                Text("Countdown: \(formatCountdown(seconds: timeRemaining))")
+            dynamicGradient
+                .ignoresSafeArea()
+            VStack(spacing: 20) {
+                Text("Pomodorino")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                
+                Text(formatCountdown(seconds: timeRemaining))
+                    .font(.system(size: 50, weight: .medium, design: .monospaced))
                     .padding()
                     .onReceive(timer) { _ in
-                        if timeRemaining > 0 {
+                        if isRunning && timeRemaining > 0 {
                             timeRemaining -= 1
                         }
                     }
+                
+                HStack {
+                    Button(action: {
+                        isRunning.toggle()
+                    }) {
+                        Text(isRunning ? "Pause" : "Start")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(isRunning ? Color.yellow : Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                    
+                    Button(action: {
+                        timeRemaining = 1500
+                        isRunning = false
+                    }) {
+                        Text("Reset")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.red)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                }
+                .padding(.horizontal)
             }
+            .padding()
+            .foregroundColor(.white)
         }
-        .ignoresSafeArea()
     }
 }
 
