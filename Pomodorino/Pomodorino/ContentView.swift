@@ -2,216 +2,191 @@
 //  ContentView.swift
 //  Pomodorino
 //
-//  Created by William Oliveira de Lagos on 10/12/2020.
+//  Created by William Oliveira de Lagos on 18.10.2026.
 //
 
 import SwiftUI
-import Foundation
-
-func formatCountdown(seconds: Int) -> String {
-    // Calculate hours, minutes, and seconds
-    let minutes = seconds / 60
-    let remainingSeconds = seconds % 60
-    return String(format: "%02d:%02d", minutes, remainingSeconds)
-}
 
 struct ContentView: View {
-    enum TimerMode {
-        case pomodoro, shortPause
-    }
-    @State private var mode: TimerMode = .pomodoro
-    @State private var timeRemaining = 1500 // Default 25 minutes
-    @State private var isRunning = false
-    @State private var showCompletion = false
-    @State private var animateTomato = false
+    @StateObject private var timer = PomodoroTimer()
+    @Environment(\.scenePhase) private var scenePhase
     
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    
-    // Compute a gradient that changes with the time remaining and mode
-    private var dynamicGradient: LinearGradient {
-        switch mode {
-        case .pomodoro:
-            let fraction = Double(timeRemaining) / 1500.0
-            let endColor = Color.red.opacity(1 - fraction)
-            let startColor = Color.yellow.opacity(fraction)
-            return LinearGradient(colors: [startColor, endColor], startPoint: .top, endPoint: .bottom)
-        case .shortPause:
-            let fraction = Double(timeRemaining) / 300.0
-            let endColor = Color.blue.opacity(1 - fraction)
-            let startColor = Color.green.opacity(fraction)
-            return LinearGradient(colors: [startColor, endColor], startPoint: .top, endPoint: .bottom)
-        }
-    }
-    
-    // Progress bar fraction
-    private var progress: Double {
-        switch mode {
-        case .pomodoro:
-            return Double(timeRemaining) / 1500.0
-        case .shortPause:
-            return Double(timeRemaining) / 300.0
-        }
-    }
-    
-    // Timer label
-    private var timerLabel: String {
-        switch mode {
-        case .pomodoro:
-            return "Pomodorino"
-        case .shortPause:
-            return "Short Pause"
-        }
-    }
+    private let brandYellow = Color(red: 0.976, green: 0.769, blue: 0.129)
+    private let darkGrey = Color(red: 0.227, green: 0.227, blue: 0.227)
     
     var body: some View {
         ZStack {
-            dynamicGradient
+            Color(uiColor: .systemGroupedBackground)
                 .ignoresSafeArea()
-            VStack(spacing: 20) {
-                Text(timerLabel)
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+            
+            VStack(spacing: 28) {
+                // Header
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Pomodorino")
+                            .font(.system(.title, design: .rounded, weight: .bold))
+                            .foregroundColor(.primary)
+                        Text(timer.phase == .focus ? "Stay focused & productive" : "Rest and recharge")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    if timer.completedPomodoros > 0 {
+                        HStack(spacing: 4) {
+                            Text("🍅")
+                                .font(.subheadline)
+                            Text("\(timer.completedPomodoros)")
+                                .font(.system(.headline, design: .rounded))
+                                .foregroundColor(.primary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .clipShape(Capsule())
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
                 
+                // Mode Picker
+                HStack(spacing: 8) {
+                    ForEach(PomodoroPhase.allCases) { phase in
+                        Button(action: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                timer.switchPhase(to: phase)
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Text(phase.icon)
+                                Text(phase.rawValue)
+                                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(timer.phase == phase ? brandYellow : Color(uiColor: .secondarySystemGroupedBackground))
+                            .foregroundColor(timer.phase == phase ? darkGrey : .secondary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .shadow(color: timer.phase == phase ? brandYellow.opacity(0.3) : .clear, radius: 4, y: 2)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 24)
+                
+                Spacer()
+                
+                // Circular Timer Ring
                 ZStack {
-                    // Circular progress bar
+                    // Outer track
                     Circle()
-                        .stroke(lineWidth: 12)
-                        .opacity(0.3)
-                        .foregroundColor(.white)
-                        .frame(width: 160, height: 160)
-                    Circle()
-                        .trim(from: 0.0, to: CGFloat(progress))
-                        .stroke(style: StrokeStyle(lineWidth: 12, lineCap: .round, lineJoin: .round))
-                        .foregroundColor(mode == .pomodoro ? .green : .blue)
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 160, height: 160)
-                        .animation(.easeInOut, value: progress)
-                    VStack {
-                        // Animated tomato icon
-                        Text(mode == .pomodoro ? "🍅" : "☕️")
-                            .font(.system(size: 40))
-                            .scaleEffect(isRunning ? 1.2 : 1.0)
-                            .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: isRunning)
-                        Text(formatCountdown(seconds: timeRemaining))
-                            .font(.system(size: 50, weight: .medium, design: .monospaced))
-                            .padding(.top, 8)
-                    }
-                }
-                .padding(.bottom, 10)
-                .onReceive(timer) { _ in
-                    if isRunning && timeRemaining > 0 {
-                        timeRemaining -= 1
-                        if timeRemaining == 0 {
-                            isRunning = false
-                            showCompletion = true
-                        }
-                    }
-                }
-                
-                if showCompletion {
-                    // Confetti/checkmark animation
-                    VStack {
-                        Text("✅")
-                            .font(.system(size: 60))
-                            .transition(.scale)
-                        Text("Session Complete!")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                    }
-                    .padding()
-                    .background(Color.green.opacity(0.8))
-                    .cornerRadius(16)
-                    .foregroundColor(.white)
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            showCompletion = false
-                        }
-                    }
-                }
-                
-                HStack {
-                    Button(action: {
-                        isRunning.toggle()
-                        if isRunning {
-                            scheduleNotification()
-                        }
-                    }) {
-                        Text(isRunning ? "Pause" : "Start")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(isRunning ? Color.yellow : (mode == .pomodoro ? Color.green : Color.blue))
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                            .scaleEffect(isRunning ? 1.05 : 1.0)
-                            .animation(.spring(), value: isRunning)
-                    }
+                        .stroke(Color(uiColor: .tertiarySystemFill), lineWidth: 16)
+                        .frame(width: 260, height: 260)
                     
+                    // Progress arc
+                    Circle()
+                        .trim(from: 0.0, to: CGFloat(timer.progress))
+                        .stroke(
+                            brandYellow,
+                            style: StrokeStyle(lineWidth: 16, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 260, height: 260)
+                        .animation(.linear(duration: 0.25), value: timer.progress)
+                    
+                    // Center content
+                    VStack(spacing: 8) {
+                        Text(timer.phase.icon)
+                            .font(.system(size: 48))
+                            .scaleEffect(timer.isRunning ? 1.08 : 1.0)
+                            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: timer.isRunning)
+                        
+                        Text(timer.formattedTime)
+                            .font(.system(size: 54, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundColor(.primary)
+                        
+                        Text(timer.phase.rawValue.uppercased())
+                            .font(.system(.caption, design: .rounded, weight: .bold))
+                            .tracking(2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.vertical, 10)
+                
+                Spacer()
+                
+                // Controls
+                VStack(spacing: 14) {
+                    // Primary Action Button (Start / Pause)
                     Button(action: {
-                        switch mode {
-                        case .pomodoro:
-                            timeRemaining = 1500
-                        case .shortPause:
-                            timeRemaining = 300
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            timer.toggle()
                         }
-                        isRunning = false
-                        showCompletion = false
                     }) {
-                        Text("Reset")
+                        HStack(spacing: 10) {
+                            Image(systemName: timer.isRunning ? "pause.fill" : "play.fill")
+                                .font(.title3.weight(.bold))
+                            Text(timer.isRunning ? "Pause" : "Start")
+                                .font(.system(.title3, design: .rounded, weight: .bold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(brandYellow)
+                        .foregroundColor(darkGrey)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .shadow(color: brandYellow.opacity(0.4), radius: 8, y: 4)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Secondary Actions (Reset & Skip)
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                timer.reset()
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.counterclockwise")
+                                Text("Reset")
+                            }
+                            .font(.system(.subheadline, design: .rounded, weight: .medium))
                             .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.red)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                            .scaleEffect(1.05)
-                            .animation(.spring(), value: timeRemaining)
+                            .frame(height: 44)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .foregroundColor(.secondary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                timer.skip()
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "forward.fill")
+                                Text("Skip")
+                            }
+                            .font(.system(.subheadline, design: .rounded, weight: .medium))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .foregroundColor(.secondary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal)
-                // New buttons for mode switching
-                HStack {
-                    Button(action: {
-                        mode = .shortPause
-                        timeRemaining = 300
-                        isRunning = false
-                        showCompletion = false
-                    }) {
-                        Text("Short Pause")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                    Button(action: {
-                        mode = .pomodoro
-                        timeRemaining = 1500
-                        isRunning = false
-                        showCompletion = false
-                    }) {
-                        Text("Back to Pomodoro")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.green)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                }
-                .padding(.horizontal)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
             }
-            .padding()
-            .foregroundColor(.white)
         }
-    }
-    func scheduleNotification() {
-        let content = UNMutableNotificationContent()
-        content.title = "Pomodoro Timer"
-        content.body = "Your Pomodoro session has ended. Take a break!"
-        content.sound = .default
-
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1500, repeats: false)
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
-
-        UNUserNotificationCenter.current().add(request)
+        .onAppear {
+            timer.requestNotificationPermission()
+        }
+        .onChange(of: scenePhase) { newPhase in
+            timer.handleScenePhase(newPhase)
+        }
     }
 }
 
