@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var timer = PomodoroTimer()
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showSettings = false
     
     private let brandYellow = Color(red: 0.976, green: 0.769, blue: 0.129)
     private let darkGrey = Color(red: 0.15, green: 0.15, blue: 0.15)
@@ -86,7 +87,7 @@ struct ContentView: View {
                 .tint(brandYellow)
                 .foregroundColor(darkGrey)
                 
-                // Secondary Controls: Reset & Skip
+                // Secondary Controls: Reset, Skip, Switch Phase
                 HStack(spacing: 6) {
                     Button(action: {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -118,14 +119,68 @@ struct ContentView: View {
                     }
                     .tint(.gray.opacity(0.3))
                 }
+                
+                // Settings button
+                Button(action: { showSettings = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "gearshape")
+                        Text("Durations")
+                    }
+                    .font(.system(.footnote, design: .rounded))
+                }
+                .tint(.gray.opacity(0.3))
+                .padding(.top, 2)
             }
             .padding(.horizontal, 4)
+        }
+        .sheet(isPresented: $showSettings) {
+            WatchSettingsView(timer: timer)
         }
         .onAppear {
             timer.requestNotificationPermission()
         }
         .onChange(of: scenePhase) { newPhase in
             timer.handleScenePhase(newPhase)
+        }
+    }
+}
+
+struct WatchSettingsView: View {
+    @ObservedObject var timer: PomodoroTimer
+    @Environment(\.dismiss) private var dismiss
+    
+    private let focusOptions = [15, 20, 25, 30, 45, 50, 60]
+    private let breakOptions = [3, 5, 10, 15]
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 10) {
+                Text("Durations")
+                    .font(.headline)
+                    .foregroundColor(Color(red: 0.976, green: 0.769, blue: 0.129))
+                
+                Picker("Focus", selection: $timer.focusMinutes) {
+                    ForEach(focusOptions, id: \.self) { min in
+                        Text("\(min)m").tag(min)
+                    }
+                }
+                
+                Picker("Break", selection: $timer.breakMinutes) {
+                    ForEach(breakOptions, id: \.self) { min in
+                        Text("\(min)m").tag(min)
+                    }
+                }
+                
+                Toggle("Haptics", isOn: $timer.isSoundEnabled)
+                    .font(.footnote)
+                
+                Button("Done") {
+                    dismiss()
+                }
+                .tint(Color(red: 0.976, green: 0.769, blue: 0.129))
+                .foregroundColor(.black)
+            }
+            .padding(.horizontal, 4)
         }
     }
 }

@@ -46,22 +46,67 @@ public final class PomodoroTimer: ObservableObject {
     public static let notificationIdentifier = "io.williamlagos.pomodorino.timer"
     
     @Published public private(set) var phase: PomodoroPhase = .focus
-    @Published public private(set) var timeRemaining: TimeInterval = PomodoroPhase.focus.duration
+    @Published public private(set) var timeRemaining: TimeInterval
     @Published public private(set) var isRunning: Bool = false
     @Published public var showCompletion: Bool = false
     @Published public private(set) var completedPomodoros: Int = 0
+    
+    @Published public var focusMinutes: Int {
+        didSet {
+            UserDefaults.standard.set(focusMinutes, forKey: "focusMinutes")
+            if phase == .focus && !isRunning {
+                timeRemaining = duration(for: .focus)
+            }
+        }
+    }
+    
+    @Published public var breakMinutes: Int {
+        didSet {
+            UserDefaults.standard.set(breakMinutes, forKey: "breakMinutes")
+            if phase == .shortBreak && !isRunning {
+                timeRemaining = duration(for: .shortBreak)
+            }
+        }
+    }
+    
+    @Published public var isSoundEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isSoundEnabled, forKey: "isSoundEnabled")
+        }
+    }
     
     private var targetEndDate: Date?
     private var timerCancellable: AnyCancellable?
     
     public init() {
+        let storedFocus = UserDefaults.standard.integer(forKey: "focusMinutes")
+        let focus = storedFocus > 0 ? storedFocus : 25
+        self.focusMinutes = focus
+        
+        let storedBreak = UserDefaults.standard.integer(forKey: "breakMinutes")
+        let shortBreak = storedBreak > 0 ? storedBreak : 5
+        self.breakMinutes = shortBreak
+        
+        let storedSound = UserDefaults.standard.object(forKey: "isSoundEnabled") as? Bool
+        self.isSoundEnabled = storedSound ?? true
+        
+        self.timeRemaining = TimeInterval(focus * 60)
         requestNotificationPermission()
     }
     
     // MARK: - Computed Properties
     
+    public func duration(for phase: PomodoroPhase) -> TimeInterval {
+        switch phase {
+        case .focus:
+            return TimeInterval(focusMinutes * 60)
+        case .shortBreak:
+            return TimeInterval(breakMinutes * 60)
+        }
+    }
+    
     public var progress: Double {
-        let total = phase.duration
+        let total = duration(for: phase)
         guard total > 0 else { return 0 }
         return max(0, min(1, timeRemaining / total))
     }
@@ -104,7 +149,7 @@ public final class PomodoroTimer: ObservableObject {
     public func reset() {
         pause()
         showCompletion = false
-        timeRemaining = phase.duration
+        timeRemaining = duration(for: phase)
     }
     
     public func skipToNextPhase() {
@@ -130,7 +175,7 @@ public final class PomodoroTimer: ObservableObject {
     
     private func setPhase(_ newPhase: PomodoroPhase) {
         phase = newPhase
-        timeRemaining = newPhase.duration
+        timeRemaining = duration(for: newPhase)
     }
     
     // MARK: - Lifecycle Sync
@@ -207,6 +252,7 @@ public final class PomodoroTimer: ObservableObject {
     }
     
     private func playFeedback() {
+        guard isSoundEnabled else { return }
         #if os(watchOS)
         WKInterfaceDevice.current().play(.success)
         #elseif os(iOS)

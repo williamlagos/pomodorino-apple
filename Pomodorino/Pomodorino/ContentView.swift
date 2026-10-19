@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var timer = PomodoroTimer()
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showSettings = false
     
     private let brandYellow = Color(red: 0.976, green: 0.769, blue: 0.129)
     private let darkGrey = Color(red: 0.227, green: 0.227, blue: 0.227)
@@ -30,19 +31,33 @@ struct ContentView: View {
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
+                    
                     Spacer()
-                    if timer.completedPomodoros > 0 {
-                        HStack(spacing: 4) {
-                            Text("🍅")
-                                .font(.subheadline)
-                            Text("\(timer.completedPomodoros)")
-                                .font(.system(.headline, design: .rounded))
-                                .foregroundColor(.primary)
+                    
+                    HStack(spacing: 8) {
+                        if timer.completedPomodoros > 0 {
+                            HStack(spacing: 4) {
+                                Text("🍅")
+                                    .font(.subheadline)
+                                Text("\(timer.completedPomodoros)")
+                                    .font(.system(.headline, design: .rounded))
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .clipShape(Capsule())
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                        .clipShape(Capsule())
+                        
+                        Button(action: { showSettings = true }) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.secondary)
+                                .padding(8)
+                                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -181,11 +196,73 @@ struct ContentView: View {
                 .padding(.bottom, 24)
             }
         }
+        .sheet(isPresented: $showSettings) {
+            SettingsView(timer: timer)
+        }
         .onAppear {
             timer.requestNotificationPermission()
         }
         .onChange(of: scenePhase) { newPhase in
             timer.handleScenePhase(newPhase)
+        }
+    }
+}
+
+struct SettingsView: View {
+    @ObservedObject var timer: PomodoroTimer
+    @Environment(\.dismiss) private var dismiss
+    
+    private let focusOptions = [15, 20, 25, 30, 45, 50, 60]
+    private let breakOptions = [3, 5, 10, 15, 20]
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("Timer Durations")) {
+                    Picker("Focus Length", selection: $timer.focusMinutes) {
+                        ForEach(focusOptions, id: \.self) { min in
+                            Text("\(min) minutes").tag(min)
+                        }
+                    }
+                    Picker("Break Length", selection: $timer.breakMinutes) {
+                        ForEach(breakOptions, id: \.self) { min in
+                            Text("\(min) minutes").tag(min)
+                        }
+                    }
+                }
+                
+                Section(header: Text("Audio & Feedback")) {
+                    Toggle("Sound & Haptics", isOn: $timer.isSoundEnabled)
+                }
+                
+                Section(header: Text("About Pomodorino")) {
+                    HStack {
+                        Text("Version")
+                        Spacer()
+                        Text("1.0.1 (102)")
+                            .foregroundColor(.secondary)
+                    }
+                    Link(destination: URL(string: "https://github.com/williamlagos/pomodorino")!) {
+                        HStack {
+                            Text("Open Source on GitHub")
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .fontWeight(.bold)
+                }
+            }
         }
     }
 }
